@@ -1,0 +1,52 @@
+# Based on: https://manual.seafile.com/latest/docker/deploy_seafile_with_docker/
+# https://manual.seafile.com/11.0/docker/docker-compose/ce/11.0/docker-compose.yml
+# Haven't found the official 12.0 docker-compose-yml at that time so did not checked or used that: https://manual.seafile.com/12.0/docker/ce/seafile-server.yml
+#
+# Source: https://github.com/sausix/Seafile-Docker
+name: seafile
+services:
+  db:
+    image: mariadb:latest  # 10.11 is official but latest (11.6) works.
+    container_name: seafile-mysql
+    environment:
+      - MYSQL_LOG_CONSOLE=true
+      - MARIADB_AUTO_UPGRADE=1
+      - TZ=${TZ}  # OS should have this set. tzselect or .env
+      - MARIADB_INITDB_SKIP_TZINFO=1
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PW}  # .env
+      volumes:
+      - ./db:/var/lib/mysql  # Required, specifies the path to MySQL data persistent store.
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro  # Time zone stuff. Not required.
+    networks:
+      - seafile-net
+# If you have to debug seafile SQL statements:
+#    command: mariadbd --log-warnings=4 --general-log --general-log-file=/var/lib/mysql/general-log.txt
+
+  memcached:
+    image: memcached:alpine
+    container_name: seafile-memcached
+    entrypoint: memcached -m 256
+    networks:
+      - seafile-net
+
+  seafile:
+    image: seafileltd/seafile-mc:12.0-latest
+    container_name: seafile
+    volumes:
+      - ./seafile-data:/shared   # Required, specifies the path to Seafile data persistent store.
+#      - /data/seafile:/shared   # Better store it outside with an absolute path
+    env_file:
+      - le.env
+      - seafile.env
+    environment:
+      - DB_HOST=db  # Probably old and unused.
+      - TIME_ZONE=${TZ}  # Used by seafile?
+      - TZ=${TZ}  # Linux standard.
+    depends_on:
+      - db
+      - memcached
+    networks:
+      - seafile-net
+
+networks:
+  seafile-net:
